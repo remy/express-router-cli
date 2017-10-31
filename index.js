@@ -15,7 +15,7 @@ const main = async (target, _port, first = true) => {
     throw new Error(`Cannot find "${target}"`);
   }
 
-  const mod = resolve(__dirname, target);
+  const mod = resolve(process.cwd(), target);
   decache(mod);
   const router = require(mod);
   const server = require('express')();
