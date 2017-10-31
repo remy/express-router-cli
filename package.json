@@ -1,0 +1,24 @@
+{
+  "name": "express-router-cli",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "bin": {
+    "router": "./index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Remy Sharp",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^2.3.0",
+    "chokidar": "^1.7.0",
+    "clean-stacktrace": "^1.1.0",
+    "decache": "^4.2.0",
+    "detect-port": "^1.2.1",
+    "express": "^4.16.2",
+    "micro": "^9.0.0"
+  }
+}
