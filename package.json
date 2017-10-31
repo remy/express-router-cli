@@ -1,6 +1,6 @@
 {
   "name": "express-router-cli",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description":
     "Mounts and watches a single file express router for quick testing.",
   "main": "index.js",
@@ -20,5 +20,14 @@
     "decache": "^4.2.0",
     "detect-port": "^1.2.1",
     "express": "^4.16.2"
-  }
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/remy/express-router-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/remy/express-router-cli/issues"
+  },
+  "homepage": "https://github.com/remy/express-router-cli#readme"
 }
