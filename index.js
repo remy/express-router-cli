@@ -18,14 +18,14 @@ const main = async (target, _port, first = true) => {
   const mod = resolve(process.cwd(), target);
   decache(mod);
   const router = require(mod);
-  const server = require('express')();
+  const app = require('express')();
 
-  server.use(router);
+  app.use(router);
 
   const dir = valid.isDirectory() ? target : dirname(target);
 
   const port = await detect(_port);
-  server.listen(port);
+  const server = app.listen(port);
   console.log(chalk.gray(`\n> Mounted on http://localhost:${port}`));
   if (first)
     console.log(
@@ -41,6 +41,7 @@ const main = async (target, _port, first = true) => {
     const watcher = chokidar.watch(`${dir}/*`).on('change', path => {
       console.log(chalk.gray(`+ reload due to ${path}`));
       watcher.close();
+      server.close();
       resolve(main(target, port));
     });
   });
