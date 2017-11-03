@@ -9,7 +9,33 @@ const { resolve, dirname } = require('path');
 const fs = require('fs');
 const stat = promisify(fs.stat);
 
-const main = async (target, _port, first = true) => {
+const getRoutes = (stack, root = '') => {
+  return stack.reduce((acc, curr) => {
+    if (curr.route && curr.route.path) {
+      if (Array.isArray(curr.route.path)) {
+        acc.push(...curr.route.path.map(path => root + path));
+      } else acc.push(root + curr.route.path);
+      return acc;
+    }
+
+    if (curr.handle.stack) {
+      acc.push(
+        getRoutes(
+          curr.handle.stack,
+          curr.regexp
+            .toString()
+            .replace(/^\/\^/, '')
+            .replace(/\\\/\?\(\?=\\\/\|\$\)\/i/, '')
+            .replace(/\\\//g, '/')
+        )
+      );
+    }
+
+    return acc;
+  }, []);
+};
+
+const main = async (target, _port, first = false) => {
   const valid = await stat(target);
   if (!valid) {
     throw new Error(`Cannot find "${target}"`);
@@ -17,24 +43,33 @@ const main = async (target, _port, first = true) => {
 
   const mod = resolve(process.cwd(), target);
   decache(mod);
-  const router = require(mod);
-  const app = require('express')();
-
-  app.use(router);
 
   const dir = valid.isDirectory() ? target : dirname(target);
-
+  const app = require('express')();
   const port = await detect(_port);
   const server = app.listen(port);
-  console.log(chalk.gray(`\n> Mounted on http://localhost:${port}`));
-  if (first)
-    console.log(
-      chalk.gray(
-        router.stack
-          .map(_ => `- http://localhost:${port}${_.route.path}`)
-          .join('\n')
-      ) + '\n'
-    );
+  try {
+    const router = require(mod);
+
+    app.use(router);
+
+    console.log(chalk.gray(`\n> Mounted on http://localhost:${port}`));
+    if (first)
+      console.log(
+        chalk.gray(
+          getRoutes(router.stack)
+            .map(path => `- http://localhost:${port}${path}`)
+            .join('\n')
+        ) + '\n'
+      );
+  } catch (error) {
+    console.log(chalk.red(`> Failed to mount "${target}", waiting for change`));
+    console.log(error);
+  }
+
+  app.use((req, res) => {
+    res.send('Unknown handler or waiting for changes…');
+  });
 
   return new Promise(resolve => {
     if (first) console.log(chalk.gray(`+ watching ${dir}/*`));
@@ -47,7 +82,7 @@ const main = async (target, _port, first = true) => {
   });
 };
 
-main(process.argv[2], process.env.PORT || 5000).catch(e => {
+main(process.argv[2], process.env.PORT || 5000, true).catch(e => {
   console.error(clean(e.stack));
   process.exit(1);
 });
