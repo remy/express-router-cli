@@ -7,6 +7,7 @@ const { promisify } = require('util');
 const { resolve, dirname } = require('path');
 const fs = require('fs');
 const stat = promisify(fs.stat);
+const debug = false;
 
 const getRoutes = (stack, root = '') => {
   return stack.reduce((acc, curr) => {
@@ -94,16 +95,16 @@ const main = async (target, _port, first = false) => {
 
     const routes = getRoutes(router.stack, `http://localhost:${port}`);
 
-    console.log();
-
     if (first) {
       // just dump on screen
+      console.log();
       console.log(
         chalk.gray(routes.map(path => `* ${path}`).join('\n')) + '\n'
       );
     } else {
       const delta = diff(lastRoutes, routes);
       if (delta.add.length || delta.remove.length) {
+        console.log();
         console.log(
           routes
             .map(path => {
@@ -129,27 +130,32 @@ const main = async (target, _port, first = false) => {
     res.send('Unknown handler or waiting for changes…');
   });
 
-  if (first) {
-    return new Promise(resolve => {
+  return new Promise(resolve => {
+    if (first) {
       console.log(chalk.gray(`+ watching ${dir}/*`));
-      const watcher = chokidar
-        .watch(`${dir}/**/*`, { persistent: true })
-        .on('change', path => {
-          console.log(
-            chalk.gray(
-              `+ reload due to ${path} @ ${new Date()
-                .toJSON()
-                .split('T')
-                .pop()
-                .replace(/\..*$/, '')}`
-            )
-          );
-          watcher.close();
-          server.close();
+    }
+    const watcher = chokidar
+      .watch(`${dir}/**/*`, { persistent: true })
+      .on('change', path => {
+        console.log(
+          chalk.gray(
+            `+ ${new Date()
+              .toJSON()
+              .split('T')
+              .pop()
+              .replace(/\..*$/, '')} reload due to ${path}`
+          )
+        );
+        watcher.close();
+        server.close(e => {
           resolve(main(target, port));
         });
-    });
-  }
+      })
+      .on(
+        'add',
+        path => debug && console.log(chalk.gray(`> watching ${path}`))
+      );
+  });
 };
 
 main(process.argv[2], process.env.PORT || 5000, true).catch(e => {
