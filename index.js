@@ -62,7 +62,7 @@ const diff = (old, changed) => {
   return res;
 };
 
-let lastRouteLength = [];
+let lastRoutes = [];
 
 const main = async (target, _port, first = false) => {
   const valid = await stat(target);
@@ -102,22 +102,24 @@ const main = async (target, _port, first = false) => {
         chalk.gray(routes.map(path => `* ${path}`).join('\n')) + '\n'
       );
     } else {
-      const delta = diff(lastRouteLength, routes);
-      console.log(
-        routes
-          .map(path => {
-            if (delta.add.includes(path)) {
-              return chalk.bgGreen.white(`+ ${path}`);
-            }
+      const delta = diff(lastRoutes, routes);
+      if (delta.add.length || delta.remove.length) {
+        console.log(
+          routes
+            .map(path => {
+              if (delta.add.includes(path)) {
+                return chalk.bgGreen.white(`+ ${path}`);
+              }
 
-            return chalk.grey(`* ${path}`);
-          })
-          .concat(delta.remove.map(path => chalk.red(`- ${path}`)))
-          .join('\n') + '\n'
-      );
+              return chalk.grey(`* ${path}`);
+            })
+            .concat(delta.remove.map(path => chalk.red(`- ${path}`)))
+            .join('\n') + '\n'
+        );
+      }
     }
 
-    lastRouteLength = routes;
+    lastRoutes = routes;
   } catch (error) {
     console.log(chalk.red(`> Failed to mount "${target}", waiting for change`));
     console.log(error);
@@ -127,15 +129,27 @@ const main = async (target, _port, first = false) => {
     res.send('Unknown handler or waiting for changes…');
   });
 
-  return new Promise(resolve => {
-    if (first) console.log(chalk.gray(`+ watching ${dir}/*`));
-    const watcher = chokidar.watch(`${dir}/*`).on('change', path => {
-      console.log(chalk.gray(`+ reload due to ${path}`));
-      watcher.close();
-      server.close();
-      resolve(main(target, port));
+  if (first) {
+    return new Promise(resolve => {
+      console.log(chalk.gray(`+ watching ${dir}/*`));
+      const watcher = chokidar
+        .watch(`${dir}/**/*`, { persistent: true })
+        .on('change', path => {
+          console.log(
+            chalk.gray(
+              `+ reload due to ${path} @ ${new Date()
+                .toJSON()
+                .split('T')
+                .pop()
+                .replace(/\..*$/, '')}`
+            )
+          );
+          watcher.close();
+          server.close();
+          resolve(main(target, port));
+        });
     });
-  });
+  }
 };
 
 main(process.argv[2], process.env.PORT || 5000, true).catch(e => {
