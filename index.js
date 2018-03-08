@@ -3,6 +3,7 @@ const detect = require('detect-port');
 const chokidar = require('chokidar');
 const chalk = require('chalk');
 const clean = require('clean-stacktrace');
+const cors = require('cors');
 const { promisify } = require('util');
 const { resolve, dirname } = require('path');
 const fs = require('fs');
@@ -85,13 +86,20 @@ const main = async (target, _port, first = false) => {
   const app = require('express')();
   const port = await detect(_port);
   const server = app.listen(port);
+
+  // enable cors
+  app.use(cors());
+  app.options('*', cors()); // include before other routes
+
   try {
     const router = require(mod);
 
     app.use(router);
 
     if (first)
-      console.log(chalk.gray(`\n> Mounted on http://localhost:${port}`));
+      console.log(
+        chalk.gray(`\n> Mounted on http://localhost:${port} with CORS support`)
+      );
 
     const routes = getRoutes(router.stack, `http://localhost:${port}`);
 
@@ -131,9 +139,6 @@ const main = async (target, _port, first = false) => {
   });
 
   return new Promise(resolve => {
-    if (first) {
-      console.log(chalk.gray(`+ watching ${dir}/*`));
-    }
     const watcher = chokidar
       .watch(`${dir}/**/*`, { persistent: true })
       .on('change', path => {
@@ -151,10 +156,13 @@ const main = async (target, _port, first = false) => {
           resolve(main(target, port));
         });
       })
-      .on(
-        'add',
-        path => debug && console.log(chalk.gray(`> watching ${path}`))
-      );
+      .on('error', error => console.log(chalk.red('> watch error', error)))
+      .on('add', path => debug && console.log(chalk.gray(`> watching ${path}`)))
+      .on('ready', () => {
+        if (first) {
+          console.log(chalk.gray(`+ watching ${dir}/*`));
+        }
+      });
   });
 };
 
