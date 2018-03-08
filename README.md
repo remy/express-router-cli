@@ -4,7 +4,7 @@ This is a tiny utility for testing express routes.
 
 ```
 npm install -g express-router-cli
-# router is installed
+# now the router is installed
 ❯ router ../mysite/route/api
 > Mounted on http://localhost:5001
 - http://localhost:5001/
@@ -13,10 +13,12 @@ npm install -g express-router-cli
 + watching ../mysite/route/api/*
 ```
 
-- Supports express routes. Possibly other kinds, not sure!
+- Includes CORS by default
 - Auto selects an open port from 5000 upwards
-- Watches the directory of the target and auto reloads
+- Watches all required files (excluding `node_modules`) and auto reloads all routes with a visual diff of new or removed routes
+- Unhandled rejections will automatically restart the server, dropping existing (hanging) connections
+- Supports express routes. Possibly other kinds, not sure!
 
 ## License
 
-- MIT / rem.mit-license.org
+- [MIT](https://rem.mit-license.org)

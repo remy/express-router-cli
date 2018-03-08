@@ -1,14 +1,19 @@
 #!/usr/bin/env node
-const detect = require('detect-port');
-const chokidar = require('chokidar');
-const chalk = require('chalk');
-const clean = require('clean-stacktrace');
-const cors = require('cors');
+require('@remy/envy'); // load .env
+const detect = require('detect-port'); // move up through 5000 port
+const chokidar = require('chokidar'); // watch
+const chalk = require('chalk'); // coloured output
+const clean = require('clean-stacktrace'); // remove internals from trace
+const cors = require('cors'); // support cors by default
 const { promisify } = require('util');
-const { resolve, dirname } = require('path');
+const p = require('path');
+const { resolve } = p;
 const fs = require('fs');
 const stat = promisify(fs.stat);
-const debug = false;
+const debug = !!process.env.DEBUG;
+const cwd = process.cwd();
+
+const relative = path => p.relative(cwd, path);
 
 const getRoutes = (stack, root = '') => {
   return stack.reduce((acc, curr) => {
@@ -64,7 +69,68 @@ const diff = (old, changed) => {
   return res;
 };
 
+// modified from https://github.com/isaacs/server-destroy
+function enableDestroy(server) {
+  const connections = new Map();
+
+  server.on('connection', connection => {
+    const key = connection.remoteAddress + ':' + connection.remotePort;
+    connections.set(key, connection);
+    connection.on('close', function() {
+      connections.delete(key);
+    });
+  });
+
+  server.destroy = function(cb) {
+    server.close((...args) => {
+      connections.clear();
+      cb.apply(null, args);
+    });
+    for (let [, connection] of connections) {
+      connection.destroy();
+    }
+  };
+}
+
+// lifted from node-dev, but pretty straight forward: hook into node's require
+// system registering each `require` and add to a map that is then monitored
+const hook = (wrapper, callback) => {
+  updateHooks();
+
+  function updateHooks() {
+    /* eslint-disable node/no-deprecated-api */
+    Object.keys(require.extensions).forEach(ext => {
+      const fn = require.extensions[ext];
+      if (typeof fn === 'function' && fn.name !== '___requireHook') {
+        require.extensions[ext] = createHook(fn);
+      }
+    });
+  }
+
+  function createHook(handler) {
+    return function ___requireHook(module, filename) {
+      if (module.parent === wrapper) {
+        module.id = '.';
+        module.parent = null;
+        process.mainModule = module;
+      }
+      if (!module.loaded) {
+        if (!module.id.includes('/node_modules/')) callback(module.filename);
+      }
+
+      // Invoke the original handler
+      handler(module, filename);
+
+      // Make sure the module did not hijack the handler
+      updateHooks();
+    };
+  }
+};
+
 let lastRoutes = [];
+const files = new Set();
+
+hook(module, file => files.add(file));
 
 const main = async (target, _port, first = false) => {
   const valid = await stat(target);
@@ -72,28 +138,32 @@ const main = async (target, _port, first = false) => {
     throw new Error(`Cannot find "${target}"`);
   }
 
-  const mod = resolve(process.cwd(), target);
-  const dir = valid.isDirectory() ? target : dirname(target);
-  const root = resolve(dir);
+  const mod = resolve(cwd, target);
 
-  // clear all required modules matching the dir
+  // clear all required modules that aren't node_modules
   Object.keys(require.cache).forEach(path => {
-    if (path.startsWith(root)) {
+    if (!path.includes('/node_modules/')) {
       delete require.cache[path];
     }
   });
 
-  const app = require('express')();
+  const app = require('express')(); // required late to reload cache
   const port = await detect(_port);
   const server = app.listen(port);
 
+  // this ensures that outstanding connections are closed when the server
+  // is destroyed
+  enableDestroy(server);
+
   // enable cors
   app.use(cors());
-  app.options('*', cors()); // include before other routes
+  app.options('*', cors());
+
+  files.clear();
 
   try {
+    // TODO watch for required files and add them to the watching
     const router = require(mod);
-
     app.use(router);
 
     if (first)
@@ -140,7 +210,7 @@ const main = async (target, _port, first = false) => {
 
   return new Promise(resolve => {
     const watcher = chokidar
-      .watch(`${dir}/**/*`, { persistent: true })
+      .watch(Array.from(files), { persistent: true })
       .on('change', path => {
         console.log(
           chalk.gray(
@@ -148,25 +218,39 @@ const main = async (target, _port, first = false) => {
               .toJSON()
               .split('T')
               .pop()
-              .replace(/\..*$/, '')} reload due to ${path}`
+              .replace(/\..*$/, '')} reload due to ${relative(path)}`
           )
         );
-        watcher.close();
-        server.close(e => {
-          resolve(main(target, port));
-        });
+        resolve(restart());
       })
       .on('error', error => console.log(chalk.red('> watch error', error)))
-      .on('add', path => debug && console.log(chalk.gray(`> watching ${path}`)))
+      .on(
+        'add',
+        path => debug && console.log(chalk.gray(`> watching ${relative(path)}`))
+      )
       .on('ready', () => {
         if (first) {
-          console.log(chalk.gray(`+ watching ${dir}/*`));
+          console.log(chalk.gray(`+ watching ${files.size} dependencies`));
         }
       });
+
+    const restart = () =>
+      new Promise(resolve => {
+        watcher.close();
+        server.destroy(() => {
+          resolve(main(target, port));
+        });
+      });
+
+    process.once('unhandledRejection', reason => {
+      console.log(chalk.red(`\n× ${reason.stack}`));
+      restart();
+    });
   });
 };
 
 main(process.argv[2], process.env.PORT || 5000, true).catch(e => {
   console.error(clean(e.stack));
+  /* eslint-disable-next-line no-process-exit */
   process.exit(1);
 });
