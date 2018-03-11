@@ -3,6 +3,7 @@ require('@remy/envy'); // load .env
 const detect = require('detect-port'); // move up through 5000 port
 const chokidar = require('chokidar'); // watch
 const chalk = require('chalk'); // coloured output
+const morgan = require('morgan');
 const clean = require('clean-stacktrace'); // remove internals from trace
 const cors = require('cors'); // support cors by default
 const { promisify } = require('util');
@@ -158,6 +159,7 @@ const main = async (target, _port, first = false) => {
   // enable cors
   app.use(cors());
   app.options('*', cors());
+  app.use(morgan('dev'));
 
   files.clear();
 
