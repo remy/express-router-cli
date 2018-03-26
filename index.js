@@ -141,9 +141,9 @@ const main = async (target, _port, first = false) => {
 
   const mod = resolve(cwd, target);
 
-  // clear all required modules that aren't node_modules
+  // clear all required modules that our code didn't load
   Object.keys(require.cache).forEach(path => {
-    if (!path.includes('/node_modules/')) {
+    if (!path.includes(__dirname)) {
       delete require.cache[path];
     }
   });
