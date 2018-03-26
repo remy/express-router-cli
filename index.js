@@ -157,8 +157,8 @@ const main = async (target, _port, first = false) => {
   enableDestroy(server);
 
   // enable cors
-  app.use(cors());
-  app.options('*', cors());
+  app.use(cors({ origin: true, credentials: true }));
+  app.options(cors({ origin: true, credentials: true }));
   app.use(morgan('dev'));
 
   files.clear();
