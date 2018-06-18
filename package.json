@@ -1,10 +1,11 @@
 {
   "name": "express-router-cli",
-  "version": "1.5.2",
-  "description": "Mounts and watches a single file express router for quick testing.",
+  "version": "1.5.3",
+  "description":
+    "Mounts and watches a single file express router for quick testing.",
   "main": "index.js",
   "engines": {
-    "node": "8.x"
+    "node": ">=8.x"
   },
   "bin": {
     "router": "./index.js"
